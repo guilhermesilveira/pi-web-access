@@ -64,7 +64,27 @@ export async function extractContent(
 			};
 		}
 
-		const html = await response.text();
+		// Check content type - return plain text directly without Readability
+		const contentType = response.headers.get("content-type") || "";
+		const isPlainText = contentType.includes("text/plain") || 
+			url.includes("raw.githubusercontent.com") ||
+			url.includes("gist.githubusercontent.com");
+
+		const text = await response.text();
+
+		if (isPlainText) {
+			activityMonitor.logComplete(activityId, response.status);
+			let content = text;
+			if (content.length > MAX_CONTENT_LENGTH) {
+				content = content.slice(0, MAX_CONTENT_LENGTH) + "\n\n[Content truncated...]";
+			}
+			// Extract filename from URL as title
+			const urlPath = new URL(url).pathname;
+			const title = urlPath.split("/").pop() || url;
+			return { url, title, content, error: null };
+		}
+
+		const html = text;
 		const { document } = parseHTML(html);
 
 		const reader = new Readability(document as unknown as Document);
