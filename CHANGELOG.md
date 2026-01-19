@@ -1,8 +1,21 @@
-# Pi Perplexity Web Search Extension - Changelog
+# Pi Web Access - Changelog
 
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+## [0.4.0] - 2026-01-19
+
+### Added
+
+- PDF extraction via `unpdf` - fetches PDFs from URLs and saves as markdown to `~/Downloads/`
+  - Extracts text, metadata (title, author), page count
+  - Supports PDFs up to 20MB (vs 5MB for HTML)
+  - Handles arxiv URLs with smart title fallback
+
+### Fixed
+
+- Plain text URL detection now uses hostname check instead of substring match
 
 ## [0.3.0] - 2026-01-19
 

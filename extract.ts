@@ -4,6 +4,7 @@ import TurndownService from "turndown";
 import pLimit from "p-limit";
 import { activityMonitor } from "./activity.js";
 import { extractRSCContent } from "./rsc-extract.js";
+import { extractPDFToMarkdown, isPDF } from "./pdf-extract.js";
 
 const MAX_CONTENT_LENGTH = 10000;
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -67,7 +68,9 @@ export async function extractContent(
 
 		// Check content length to avoid memory issues with huge responses
 		const contentLengthHeader = response.headers.get("content-length");
-		const maxResponseSize = 5 * 1024 * 1024; // 5MB limit
+		const contentType = response.headers.get("content-type") || "";
+		const isPDFContent = isPDF(url, contentType);
+		const maxResponseSize = isPDFContent ? 20 * 1024 * 1024 : 5 * 1024 * 1024; // 20MB for PDFs, 5MB otherwise
 		if (contentLengthHeader) {
 			const contentLength = parseInt(contentLengthHeader, 10);
 			if (contentLength > maxResponseSize) {
@@ -81,15 +84,30 @@ export async function extractContent(
 			}
 		}
 
-		// Check content type
-		const contentType = response.headers.get("content-type") || "";
+		// Handle PDFs - extract and save to markdown file
+		if (isPDFContent) {
+			try {
+				const buffer = await response.arrayBuffer();
+				const result = await extractPDFToMarkdown(buffer, url);
+				activityMonitor.logComplete(activityId, response.status);
+				return {
+					url,
+					title: result.title,
+					content: `PDF extracted and saved to: ${result.outputPath}\n\nPages: ${result.pages}\nCharacters: ${result.chars}`,
+					error: null,
+				};
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				activityMonitor.logError(activityId, message);
+				return { url, title: "", content: "", error: `PDF extraction failed: ${message}` };
+			}
+		}
 		
 		// Reject binary/non-text content types
 		if (contentType.includes("application/octet-stream") ||
 			contentType.includes("image/") ||
 			contentType.includes("audio/") ||
 			contentType.includes("video/") ||
-			contentType.includes("application/pdf") ||
 			contentType.includes("application/zip")) {
 			activityMonitor.logComplete(activityId, response.status);
 			return {
@@ -101,9 +119,10 @@ export async function extractContent(
 		}
 		
 		// Return plain text directly without Readability
+		const urlHostname = new URL(url).hostname;
 		const isPlainText = contentType.includes("text/plain") || 
-			url.includes("raw.githubusercontent.com") ||
-			url.includes("gist.githubusercontent.com");
+			urlHostname === "raw.githubusercontent.com" ||
+			urlHostname === "gist.githubusercontent.com";
 
 		const text = await response.text();
 
