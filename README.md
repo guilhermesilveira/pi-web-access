@@ -7,7 +7,7 @@ A pi extension that provides web search and content analysis capabilities powere
 - **🔍 Web Search** - Google search with citations
 - **📄 URL Analysis** - Analyze web pages, PDFs, images, and YouTube videos (up to 20 URLs)
 
-## Installation
+## Install
 
 ```bash
 pi install npm:pi-web-search
