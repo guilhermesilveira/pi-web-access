@@ -150,7 +150,7 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
         case "p": return ctx.inTable ? content : `${content.trim()}\n\n`;
         case "code": {
           const codeContent = children ? extractNode(children as Node, { ...ctx, inCode: true }) : "";
-          return `\`${codeContent}\``;
+          return ctx.inCode ? codeContent : `\`${codeContent}\``;
         }
         case "pre": {
           const preContent = children ? extractNode(children as Node, { ...ctx, inCode: true }) : "";

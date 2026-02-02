@@ -166,7 +166,7 @@ export default function (pi: ExtensionAPI) {
 			"Search the web using Perplexity AI. Returns an AI-synthesized answer with source citations. Supports batch searching with multiple queries. When includeContent is true, full page content is fetched in the background.",
 		parameters: Type.Object({
 			query: Type.Optional(Type.String({ description: "Single search query" })),
-			queries: Type.Optional(Type.Array(Type.String(), { description: "Multiple queries (parallel)" })),
+			queries: Type.Optional(Type.Array(Type.String(), { description: "Multiple queries (batch)" })),
 			numResults: Type.Optional(Type.Number({ description: "Results per query (default: 5, max: 20)" })),
 			includeContent: Type.Optional(Type.Boolean({ description: "Fetch full page content (async)" })),
 			recencyFilter: Type.Optional(
@@ -505,7 +505,7 @@ export default function (pi: ExtensionAPI) {
 			return new Text(lines.join("\n"), 0, 0);
 		},
 
-		renderResult(result, { expanded }, theme) {
+		renderResult(result, { expanded, isPartial }, theme) {
 			const details = result.details as {
 				urlCount?: number;
 				successful?: number;
@@ -514,7 +514,15 @@ export default function (pi: ExtensionAPI) {
 				title?: string;
 				truncated?: boolean;
 				responseId?: string;
+				phase?: string;
+				progress?: number;
 			};
+
+			if (isPartial) {
+				const progress = details?.progress ?? 0;
+				const bar = "\u2588".repeat(Math.floor(progress * 10)) + "\u2591".repeat(10 - Math.floor(progress * 10));
+				return new Text(theme.fg("accent", `[${bar}] ${details?.phase || "fetching"}`), 0, 0);
+			}
 
 			if (details?.error) {
 				return new Text(theme.fg("error", `Error: ${details.error}`), 0, 0);
@@ -534,7 +542,8 @@ export default function (pi: ExtensionAPI) {
 				return new Text(statusLine + "\n" + theme.fg("dim", preview), 0, 0);
 			}
 
-			const statusLine = theme.fg("success", `${details?.successful}/${details?.urlCount} URLs`) + theme.fg("muted", " (content stored)");
+			const countColor = (details?.successful ?? 0) > 0 ? "success" : "error";
+			const statusLine = theme.fg(countColor, `${details?.successful}/${details?.urlCount} URLs`) + theme.fg("muted", " (content stored)");
 			if (!expanded) {
 				return new Text(statusLine, 0, 0);
 			}

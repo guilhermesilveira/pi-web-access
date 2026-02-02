@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- `fetch_content` TUI rendered `undefined/undefined URLs` during progress updates (renderResult didn't handle `isPartial`, now shows a progress bar like `web_search` does)
+- RSC extractor produced malformed markdown for `<pre><code>` blocks (backticks inside fenced code blocks) -- extremely common on Next.js documentation pages
+- Multi-URL fetch failures rendered in green "success" color even when 0 URLs succeeded (now red)
+- `web_search` queries parameter described as "parallel" in schema but execution is sequential (changed to "batch"; `urls` correctly remains "parallel")
+
 ## [0.5.1] - 2026-02-02
 
 ### Added
