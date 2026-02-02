@@ -3,6 +3,7 @@ import { Key, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { StringEnum } from "@mariozechner/pi-ai";
 import { fetchAllContent, type ExtractedContent } from "./extract.js";
+import { clearCloneCache } from "./github-extract.js";
 import { searchWithPerplexity, type SearchResult } from "./perplexity.js";
 import {
 	clearResults,
@@ -111,6 +112,7 @@ function formatEntryLine(
 
 function handleSessionChange(ctx: ExtensionContext): void {
 	abortPendingFetches();
+	clearCloneCache();
 	sessionActive = true;
 	restoreFromSession(ctx);
 	// Unsubscribe before clear() to avoid callback with stale ctx
@@ -148,6 +150,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_shutdown", () => {
 		sessionActive = false;
 		abortPendingFetches();
+		clearCloneCache();
 		clearResults();
 		// Unsubscribe before clear() to avoid callback with stale ctx
 		widgetUnsubscribe?.();
@@ -393,6 +396,9 @@ export default function (pi: ExtensionAPI) {
 		parameters: Type.Object({
 			url: Type.Optional(Type.String({ description: "Single URL to fetch" })),
 			urls: Type.Optional(Type.Array(Type.String(), { description: "Multiple URLs (parallel)" })),
+			forceClone: Type.Optional(Type.Boolean({
+				description: "Force cloning large GitHub repositories that exceed the size threshold",
+			})),
 		}),
 
 		async execute(_toolCallId, params, signal, onUpdate, _ctx) {
@@ -409,7 +415,9 @@ export default function (pi: ExtensionAPI) {
 				details: { phase: "fetch", progress: 0 },
 			});
 
-			const fetchResults = await fetchAllContent(urlList, signal);
+			const fetchResults = await fetchAllContent(urlList, signal, {
+				forceClone: params.forceClone,
+			});
 			const successful = fetchResults.filter((r) => !r.error).length;
 			const totalChars = fetchResults.reduce((sum, r) => sum + r.content.length, 0);
 

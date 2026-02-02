@@ -5,6 +5,7 @@ import pLimit from "p-limit";
 import { activityMonitor } from "./activity.js";
 import { extractRSCContent } from "./rsc-extract.js";
 import { extractPDFToMarkdown, isPDF } from "./pdf-extract.js";
+import { extractGitHub } from "./github-extract.js";
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const CONCURRENT_LIMIT = 3;
@@ -23,11 +24,17 @@ export interface ExtractedContent {
 	error: string | null;
 }
 
+export interface ExtractOptions {
+	timeoutMs?: number;
+	forceClone?: boolean;
+}
+
 export async function extractContent(
 	url: string,
 	signal?: AbortSignal,
-	timeoutMs: number = DEFAULT_TIMEOUT_MS,
+	options?: ExtractOptions,
 ): Promise<ExtractedContent> {
+	const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 	if (signal?.aborted) {
 		return { url, title: "", content: "", error: "Aborted" };
 	}
@@ -36,6 +43,13 @@ export async function extractContent(
 		new URL(url);
 	} catch {
 		return { url, title: "", content: "", error: "Invalid URL" };
+	}
+
+	try {
+		const ghResult = await extractGitHub(url, signal, options?.forceClone);
+		if (ghResult) return ghResult;
+	} catch {
+		// GitHub extraction failed unexpectedly, fall through to normal HTTP pipeline
 	}
 
 	const activityId = activityMonitor.logStart({ type: "fetch", url });
@@ -127,22 +141,19 @@ export async function extractContent(
 
 		if (isPlainText) {
 			activityMonitor.logComplete(activityId, response.status);
-			const content = text;
-			// Extract filename from URL as title
 			const urlPath = new URL(url).pathname;
 			const title = urlPath.split("/").pop() || url;
-			return { url, title, content, error: null };
+			return { url, title, content: text, error: null };
 		}
 
-		const html = text;
-		const { document } = parseHTML(html);
+		const { document } = parseHTML(text);
 
 		const reader = new Readability(document as unknown as Document);
 		const article = reader.parse();
 
 		if (!article) {
 			// Fallback: Try extracting from RSC flight data (Next.js App Router)
-			const rscResult = extractRSCContent(html);
+			const rscResult = extractRSCContent(text);
 			if (rscResult) {
 				activityMonitor.logComplete(activityId, response.status);
 				return { url, title: rscResult.title, content: rscResult.content, error: null };
@@ -183,7 +194,7 @@ export async function extractContent(
 export async function fetchAllContent(
 	urls: string[],
 	signal?: AbortSignal,
-	timeoutMs?: number,
+	options?: ExtractOptions,
 ): Promise<ExtractedContent[]> {
-	return Promise.all(urls.map((url) => fetchLimit(() => extractContent(url, signal, timeoutMs))));
+	return Promise.all(urls.map((url) => fetchLimit(() => extractContent(url, signal, options))));
 }

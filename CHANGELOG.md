@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-02-01
+
+### Added
+- GitHub repository clone extraction for `fetch_content` -- detects GitHub code URLs, clones repos to `/tmp/pi-github-repos/`, and returns actual file contents plus local path for further exploration with `read` and `bash`
+- Lightweight API fallback for oversized repos (>350MB) and commit SHA URLs via `gh api`
+- Clone cache with concurrent request deduplication (second request awaits first's clone)
+- `forceClone` parameter on `fetch_content` to override the size threshold
+- Configurable via `~/.pi/web-search.json` under `githubClone` key (enabled, maxRepoSizeMB, cloneTimeoutSeconds, clonePath)
+- Falls back to `git clone` when `gh` CLI is unavailable (public repos only)
+- README: GitHub clone documentation with config, flow diagram, and limitations
+
+### Changed
+- Refactored `extractContent`/`fetchAllContent` signatures from positional `timeoutMs` to `ExtractOptions` object
+- Blob/tree fetch titles now include file path (e.g. `owner/repo - src/index.ts`) for better disambiguation in multi-URL results and TUI
+
+### Fixed
+- README: Activity monitor keybinding corrected from `Ctrl+Shift+O` to `Ctrl+Shift+W`
+
 ## [0.4.5] - 2026-02-01
 
 ### Changed
