@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-02-01
+
+### Changed
+- Added package keywords for npm discoverability
+
 ## [0.4.4] - 2026-02-01
 
 ### Fixed
