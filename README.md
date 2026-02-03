@@ -13,6 +13,8 @@ A pi extension that provides web search and content analysis capabilities powere
 pi install npm:pi-web-search
 ```
 
+When `includeContent: true`, sources are fetched in the background using the fetch_content routing above, and the agent receives a notification when ready.
+
 ## Configuration
 
 No special configuration required. Configure or login to any of the following model providers in pi, and it will be automatically detected and used:
