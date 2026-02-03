@@ -46,7 +46,7 @@ interface VideoConfig {
 
 const VIDEO_CONFIG_DEFAULTS: VideoConfig = {
 	enabled: true,
-	preferredModel: "gemini-2.5-flash",
+	preferredModel: "gemini-3-flash-preview",
 	maxSizeMB: 50,
 };
 
@@ -123,11 +123,12 @@ export async function extractVideo(
 ): Promise<ExtractedContent | null> {
 	const config = loadVideoConfig();
 	const effectivePrompt = options?.prompt ?? DEFAULT_VIDEO_PROMPT;
+	const effectiveModel = options?.model ?? config.preferredModel;
 	const displayName = basename(info.absolutePath);
 	const activityId = activityMonitor.logStart({ type: "fetch", url: `video:${displayName}` });
 
-	const result = await tryVideoGeminiApi(info, effectivePrompt, config, signal)
-		?? await tryVideoGeminiWeb(info, effectivePrompt, config, signal);
+	const result = await tryVideoGeminiApi(info, effectivePrompt, effectiveModel, signal)
+		?? await tryVideoGeminiWeb(info, effectivePrompt, effectiveModel, signal);
 
 	if (result) {
 		const thumbnail = await extractVideoFrame(info.absolutePath);
@@ -183,7 +184,7 @@ export async function getLocalVideoDuration(filePath: string): Promise<number | 
 async function tryVideoGeminiWeb(
 	info: VideoFileInfo,
 	prompt: string,
-	config: VideoConfig,
+	model: string,
 	signal?: AbortSignal,
 ): Promise<ExtractedContent | null> {
 	try {
@@ -193,7 +194,7 @@ async function tryVideoGeminiWeb(
 
 		const text = await queryWithCookies(prompt, cookies, {
 			files: [info.absolutePath],
-			model: config.preferredModel,
+			model,
 			signal,
 			timeoutMs: 180000,
 		});
@@ -212,7 +213,7 @@ async function tryVideoGeminiWeb(
 async function tryVideoGeminiApi(
 	info: VideoFileInfo,
 	prompt: string,
-	config: VideoConfig,
+	model: string,
 	signal?: AbortSignal,
 ): Promise<ExtractedContent | null> {
 	const apiKey = getApiKey();
@@ -227,7 +228,7 @@ async function tryVideoGeminiApi(
 		await pollFileState(fileName, apiKey, signal, 120000);
 
 		const text = await queryGeminiApiWithVideo(prompt, uploaded.uri, {
-			model: config.preferredModel,
+			model,
 			mimeType: info.mimeType,
 			signal,
 			timeoutMs: 120000,

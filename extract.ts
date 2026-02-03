@@ -48,6 +48,7 @@ export interface ExtractOptions {
 	prompt?: string;
 	timestamp?: string;
 	frames?: number;
+	model?: string;
 }
 
 function parseTimestamp(ts: string): number | null {
@@ -269,7 +270,7 @@ export async function extractContent(
 	const ytInfo = isYouTubeURL(url);
 	if (ytInfo.isYouTube && isYouTubeEnabled()) {
 		try {
-			const ytResult = await extractYouTube(url, signal, options?.prompt);
+			const ytResult = await extractYouTube(url, signal, options?.prompt, options?.model);
 			if (ytResult) return ytResult;
 		} catch {}
 		return {

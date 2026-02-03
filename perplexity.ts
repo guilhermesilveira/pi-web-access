@@ -56,7 +56,7 @@ function loadConfig(): WebSearchConfig {
 
 function getApiKey(): string {
 	const config = loadConfig();
-	const key = config.perplexityApiKey || process.env.PERPLEXITY_API_KEY;
+	const key = process.env.PERPLEXITY_API_KEY || config.perplexityApiKey;
 	if (!key) {
 		throw new Error(
 			"Perplexity API key not found. Either:\n" +
@@ -93,7 +93,7 @@ function validateDomainFilter(domains: string[]): string[] {
 
 export function isPerplexityAvailable(): boolean {
 	const config = loadConfig();
-	return Boolean(config.perplexityApiKey || process.env.PERPLEXITY_API_KEY);
+	return Boolean(process.env.PERPLEXITY_API_KEY || config.perplexityApiKey);
 }
 
 export async function searchWithPerplexity(query: string, options: SearchOptions = {}): Promise<SearchResponse> {

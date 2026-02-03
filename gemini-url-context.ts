@@ -80,7 +80,7 @@ export async function extractWithGeminiWeb(
 
 	try {
 		const text = await queryWithCookies(EXTRACTION_PROMPT + url, cookies, {
-			model: "gemini-2.5-flash",
+			model: "gemini-3-flash-preview",
 			signal,
 			timeoutMs: 60000,
 		});

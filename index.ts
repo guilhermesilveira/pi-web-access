@@ -420,6 +420,9 @@ export default function (pi: ExtensionAPI) {
 				maximum: 12,
 				description: "Number of frames to extract. Use with timestamp range for custom density, with single timestamp to get N frames at 5s intervals, or alone to sample across the entire video. Requires yt-dlp + ffmpeg for YouTube, ffmpeg for local video.",
 			})),
+			model: Type.Optional(Type.String({
+				description: "Override the Gemini model for video/YouTube analysis (e.g. 'gemini-2.5-flash', 'gemini-3-flash-preview'). Defaults to config or gemini-3-flash-preview.",
+			})),
 		}),
 
 		async execute(_toolCallId, params, signal, onUpdate, _ctx) {
@@ -441,6 +444,7 @@ export default function (pi: ExtensionAPI) {
 				prompt: params.prompt,
 				timestamp: params.timestamp,
 				frames: params.frames,
+				model: params.model,
 			});
 			const successful = fetchResults.filter((r) => !r.error).length;
 			const totalChars = fetchResults.reduce((sum, r) => sum + r.content.length, 0);
@@ -527,7 +531,7 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderCall(args, theme) {
-			const { url, urls, prompt, timestamp, frames } = args as { url?: string; urls?: string[]; prompt?: string; timestamp?: string; frames?: number };
+			const { url, urls, prompt, timestamp, frames, model } = args as { url?: string; urls?: string[]; prompt?: string; timestamp?: string; frames?: number; model?: string };
 			const urlList = urls ?? (url ? [url] : []);
 			if (urlList.length === 0) {
 				return new Text(theme.fg("toolTitle", theme.bold("fetch ")) + theme.fg("error", "(no URL)"), 0, 0);
@@ -555,6 +559,9 @@ export default function (pi: ExtensionAPI) {
 			if (prompt) {
 				const display = prompt.length > 250 ? prompt.slice(0, 247) + "..." : prompt;
 				lines.push(theme.fg("dim", "  prompt: ") + theme.fg("muted", `"${display}"`));
+			}
+			if (model) {
+				lines.push(theme.fg("dim", "  model: ") + theme.fg("warning", model));
 			}
 			return new Text(lines.join("\n"), 0, 0);
 		},
@@ -603,8 +610,10 @@ export default function (pi: ExtensionAPI) {
 				if (typeof details?.duration === "number") {
 					statusLine += theme.fg("muted", ` | ${formatSeconds(Math.floor(details.duration))} total`);
 				}
+				const textContent = result.content.find((c) => c.type === "text")?.text || "";
 				if (!expanded) {
-					return new Text(statusLine, 0, 0);
+					const brief = textContent.length > 200 ? textContent.slice(0, 200) + "..." : textContent;
+					return new Text(statusLine + "\n" + theme.fg("dim", brief), 0, 0);
 				}
 				const lines = [statusLine];
 				if (details?.prompt) {
@@ -617,7 +626,6 @@ export default function (pi: ExtensionAPI) {
 				if (typeof details?.frames === "number") {
 					lines.push(theme.fg("dim", `  frames: ${details.frames}`));
 				}
-				const textContent = result.content.find((c) => c.type === "text")?.text || "";
 				const preview = textContent.length > 500 ? textContent.slice(0, 500) + "..." : textContent;
 				lines.push(theme.fg("dim", preview));
 				return new Text(lines.join("\n"), 0, 0);

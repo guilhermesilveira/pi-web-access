@@ -123,7 +123,7 @@ async function searchWithGeminiWeb(query: string, options: SearchOptions = {}): 
 
 	try {
 		const text = await queryWithCookies(prompt, cookies, {
-			model: "gemini-2.5-flash",
+			model: "gemini-3-flash-preview",
 			signal: options.signal,
 			timeoutMs: 60000,
 		});

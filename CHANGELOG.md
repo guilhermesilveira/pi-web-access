@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.2] - 2026-02-03
+
+### Added
+- `model` parameter on `fetch_content` to override the Gemini model per-request (e.g. `model: "gemini-2.5-flash"`)
+- Collapsed TUI results now show a 200-char text preview instead of just the status line
+- LICENSE file (MIT)
+
+### Changed
+- Default Gemini model updated from `gemini-2.5-flash` to `gemini-3-flash-preview` across all API, search, URL context, YouTube, and video paths. Gemini Web gracefully falls back to `gemini-2.5-flash` when the model header isn't available.
+- README rewritten: added tagline, badges, "Why" section, Quick Start, corrected "How It Works" routing order, fixed inaccurate env var precedence claim, added missing `/v/` YouTube format, restored `/search` command docs, collapsible Files table
+
+### Fixed
+- `PERPLEXITY_API_KEY` env var now takes precedence over config file value, matching `GEMINI_API_KEY` behavior and README documentation (was reversed)
+- `package.json` now includes `repository`, `homepage`, `bugs`, and `description` fields (repo link was missing from pi packages site)
+
 ## [0.7.0] - 2026-02-03
 
 ### Added

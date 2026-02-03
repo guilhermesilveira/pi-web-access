@@ -26,7 +26,7 @@ interface YouTubeConfig {
 	preferredModel: string;
 }
 
-const defaults: YouTubeConfig = { enabled: true, preferredModel: "gemini-2.5-flash" };
+const defaults: YouTubeConfig = { enabled: true, preferredModel: "gemini-3-flash-preview" };
 let cachedConfig: YouTubeConfig | null = null;
 
 function loadYouTubeConfig(): YouTubeConfig {
@@ -69,6 +69,7 @@ export async function extractYouTube(
 	url: string,
 	signal?: AbortSignal,
 	prompt?: string,
+	model?: string,
 ): Promise<ExtractedContent | null> {
 	const config = loadYouTubeConfig();
 	const { videoId } = isYouTubeURL(url);
@@ -76,11 +77,12 @@ export async function extractYouTube(
 		? `https://www.youtube.com/watch?v=${videoId}`
 		: url;
 	const effectivePrompt = prompt ?? YOUTUBE_PROMPT;
+	const effectiveModel = model ?? config.preferredModel;
 
 	const activityId = activityMonitor.logStart({ type: "fetch", url: `youtube.com/${videoId ?? "video"}` });
 
-	const result = await tryGeminiWeb(canonicalUrl, effectivePrompt, config, signal)
-		?? await tryGeminiApi(canonicalUrl, effectivePrompt, config, signal)
+	const result = await tryGeminiWeb(canonicalUrl, effectivePrompt, effectiveModel, signal)
+		?? await tryGeminiApi(canonicalUrl, effectivePrompt, effectiveModel, signal)
 		?? await tryPerplexity(url, effectivePrompt, signal);
 
 	if (result) {
@@ -190,7 +192,7 @@ export async function fetchYouTubeThumbnail(videoId: string): Promise<{ data: st
 async function tryGeminiWeb(
 	url: string,
 	prompt: string,
-	config: YouTubeConfig,
+	model: string,
 	signal?: AbortSignal,
 ): Promise<ExtractedContent | null> {
 	try {
@@ -201,7 +203,7 @@ async function tryGeminiWeb(
 
 		const text = await queryWithCookies(prompt, cookies, {
 			youtubeUrl: url,
-			model: config.preferredModel,
+			model,
 			signal,
 			timeoutMs: 120000,
 		});
@@ -220,7 +222,7 @@ async function tryGeminiWeb(
 async function tryGeminiApi(
 	url: string,
 	prompt: string,
-	config: YouTubeConfig,
+	model: string,
 	signal?: AbortSignal,
 ): Promise<ExtractedContent | null> {
 	try {
@@ -229,7 +231,7 @@ async function tryGeminiApi(
 		if (signal?.aborted) return null;
 
 		const text = await queryGeminiApiWithVideo(prompt, url, {
-			model: config.preferredModel,
+			model,
 			signal,
 			timeoutMs: 120000,
 		});
