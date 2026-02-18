@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Key, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
@@ -6,6 +9,7 @@ import { fetchAllContent, type ExtractedContent } from "./extract.js";
 import { clearCloneCache } from "./github-extract.js";
 import { search, type SearchProvider } from "./gemini-search.js";
 import { isGeminiWebAvailable } from "./gemini-web.js";
+import { getConfiguredGoogleAccount, clearSearchConfigCache } from "./gemini-search.js";
 import type { SearchResult } from "./perplexity.js";
 import { formatSeconds } from "./utils.js";
 import {
@@ -150,17 +154,55 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("google-account", {
-		description: "Show which Google account is used for Gemini Web search",
+		description: "Show and select which Google account is used for Gemini Web search",
 		handler: async (_args, ctx) => {
 			const availability = await isGeminiWebAvailable();
 			if (!availability) {
 				ctx.ui.notify("Gemini Web not available. Sign into gemini.google.com in Chrome.", "warning");
 				return;
 			}
-			if (availability.email) {
-				ctx.ui.notify(`Gemini Web using: ${availability.email}`, "info");
-			} else {
-				ctx.ui.notify("Gemini Web available, but could not determine account email.", "warning");
+
+			const { accounts } = availability;
+			if (accounts.length === 0) {
+				ctx.ui.notify("Gemini Web available, but could not determine account emails.", "warning");
+				return;
+			}
+
+			const configured = getConfiguredGoogleAccount();
+			const options = accounts.map((a) => {
+				const active = configured
+					? a.email.toLowerCase() === configured.toLowerCase()
+					: a.index === 0;
+				const marker = active ? " ← active" : "";
+				const name = a.name ? ` (${a.name})` : "";
+				return `${a.email}${name}${marker}`;
+			});
+
+			if (accounts.length === 1) {
+				ctx.ui.notify(`Gemini Web using: ${accounts[0].email}`, "info");
+				return;
+			}
+
+			const choice = await ctx.ui.select("Google accounts — select to set as default", options);
+			if (!choice) return;
+
+			const selectedEmail = choice.split(" (")[0].split(" ←")[0];
+			const configPath = join(homedir(), ".pi", "web-search.json");
+
+			try {
+				let config: Record<string, unknown> = {};
+				if (existsSync(configPath)) {
+					config = JSON.parse(readFileSync(configPath, "utf-8"));
+				}
+				config.googleAccount = selectedEmail;
+				const { writeFileSync, mkdirSync } = await import("node:fs");
+				mkdirSync(join(homedir(), ".pi"), { recursive: true });
+				writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+				clearSearchConfigCache();
+				ctx.ui.notify(`Gemini Web account set to: ${selectedEmail}`, "info");
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				ctx.ui.notify(`Failed to save config: ${msg}`, "error");
 			}
 		},
 	});

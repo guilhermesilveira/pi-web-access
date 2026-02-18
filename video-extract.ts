@@ -4,6 +4,7 @@ import { resolve, extname, basename, join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { activityMonitor } from "./activity.js";
 import { isGeminiWebAvailable, queryWithCookies } from "./gemini-web.js";
+import { getConfiguredGoogleAccount, resolveAccountIndex } from "./gemini-search.js";
 import { queryGeminiApiWithVideo, getApiKey, API_BASE } from "./gemini-api.js";
 import { extractHeadingTitle, type ExtractedContent, type ExtractOptions, type FrameResult } from "./extract.js";
 import { readExecError, trimErrorText, mapFfmpegError } from "./utils.js";
@@ -192,11 +193,13 @@ async function tryVideoGeminiWeb(
 		if (!availability) return null;
 		if (signal?.aborted) return null;
 
+		const accountIndex = resolveAccountIndex(availability.accounts, getConfiguredGoogleAccount());
 		const text = await queryWithCookies(prompt, availability.cookies, {
 			files: [info.absolutePath],
 			model,
 			signal,
 			timeoutMs: 180000,
+			accountIndex,
 		});
 
 		return {

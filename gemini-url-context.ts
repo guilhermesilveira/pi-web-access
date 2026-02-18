@@ -1,6 +1,7 @@
 import { activityMonitor } from "./activity.js";
 import { getApiKey, API_BASE, DEFAULT_MODEL } from "./gemini-api.js";
 import { isGeminiWebAvailable, queryWithCookies } from "./gemini-web.js";
+import { getConfiguredGoogleAccount, resolveAccountIndex } from "./gemini-search.js";
 import { extractHeadingTitle, type ExtractedContent } from "./extract.js";
 
 const EXTRACTION_PROMPT = `Extract the complete readable content from this URL as clean markdown.
@@ -76,6 +77,7 @@ export async function extractWithGeminiWeb(
 	const availability = await isGeminiWebAvailable();
 	if (!availability) return null;
 
+	const accountIndex = resolveAccountIndex(availability.accounts, getConfiguredGoogleAccount());
 	const activityId = activityMonitor.logStart({ type: "api", query: `gemini_web: ${url}` });
 
 	try {
@@ -83,6 +85,7 @@ export async function extractWithGeminiWeb(
 			model: "gemini-3-flash-preview",
 			signal,
 			timeoutMs: 60000,
+			accountIndex,
 		});
 
 		activityMonitor.logComplete(activityId, 200);

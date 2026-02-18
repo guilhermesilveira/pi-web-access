@@ -4,25 +4,56 @@ import { join } from "node:path";
 import { activityMonitor } from "./activity.js";
 import { getApiKey, API_BASE, DEFAULT_MODEL } from "./gemini-api.js";
 import { isGeminiWebAvailable, queryWithCookies } from "./gemini-web.js";
+import type { GoogleAccount } from "./chrome-cookies.js";
 import { isPerplexityAvailable, searchWithPerplexity, type SearchResult, type SearchResponse, type SearchOptions } from "./perplexity.js";
 
 export type SearchProvider = "auto" | "perplexity" | "gemini";
 
 const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 
-let cachedSearchConfig: { searchProvider: SearchProvider } | null = null;
+interface SearchConfig {
+	searchProvider: SearchProvider;
+	googleAccount?: string;
+}
 
-function getSearchConfig(): { searchProvider: SearchProvider } {
+let cachedSearchConfig: SearchConfig | null = null;
+
+function getSearchConfig(): SearchConfig {
 	if (cachedSearchConfig) return cachedSearchConfig;
 	try {
 		if (existsSync(CONFIG_PATH)) {
 			const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
-			cachedSearchConfig = { searchProvider: raw.searchProvider ?? "auto" };
+			cachedSearchConfig = {
+				searchProvider: raw.searchProvider ?? "auto",
+				googleAccount: raw.googleAccount,
+			};
 			return cachedSearchConfig;
 		}
 	} catch {}
 	cachedSearchConfig = { searchProvider: "auto" };
 	return cachedSearchConfig;
+}
+
+/** Clear cached config so changes to web-search.json take effect immediately. */
+export function clearSearchConfigCache(): void {
+	cachedSearchConfig = null;
+}
+
+/** Get the configured Google account email (if any). */
+export function getConfiguredGoogleAccount(): string | undefined {
+	return getSearchConfig().googleAccount;
+}
+
+/**
+ * Resolve a configured Google account email to an account index.
+ * Returns undefined (use default account) if no match or no config.
+ */
+export function resolveAccountIndex(accounts: GoogleAccount[], configuredEmail?: string): number | undefined {
+	if (!configuredEmail || accounts.length <= 1) return undefined;
+	const match = accounts.find((a) => a.email.toLowerCase() === configuredEmail.toLowerCase());
+	if (!match) return undefined;
+	// Index 0 = primary, no need for /u/0/ prefix
+	return match.index === 0 ? undefined : match.index;
 }
 
 export interface FullSearchOptions extends SearchOptions {
@@ -118,6 +149,9 @@ async function searchWithGeminiWeb(query: string, options: SearchOptions = {}): 
 	const availability = await isGeminiWebAvailable();
 	if (!availability) return null;
 
+	const config = getSearchConfig();
+	const accountIndex = resolveAccountIndex(availability.accounts, config.googleAccount);
+
 	const prompt = buildSearchPrompt(query, options);
 	const activityId = activityMonitor.logStart({ type: "api", query });
 
@@ -126,6 +160,7 @@ async function searchWithGeminiWeb(query: string, options: SearchOptions = {}): 
 			model: "gemini-3-flash-preview",
 			signal: options.signal,
 			timeoutMs: 60000,
+			accountIndex,
 		});
 
 		activityMonitor.logComplete(activityId, 200);

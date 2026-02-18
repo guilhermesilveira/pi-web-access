@@ -376,13 +376,19 @@ function copySidecar(srcDb: string, targetDb: string, suffix: string): void {
 const USER_AGENT =
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+export interface GoogleAccount {
+	email: string;
+	name: string;
+	index: number;
+}
+
 /**
- * Fetches the email of the active (primary) Google account using the cookies.
- * Extracts the email from the gemini.google.com/app page HTML, which embeds
- * the logged-in user's email. Falls back to the accounts.google.com/ListAccounts
- * endpoint if not found.
+ * Fetches all logged-in Google accounts using the cookies.
+ * Extracts the email from the gemini.google.com/app page HTML first, then
+ * falls back to the accounts.google.com/ListAccounts endpoint.
+ * Returns accounts in order — index 0 is the primary account (authuser=0).
  */
-export async function getActiveGoogleEmail(cookies: CookieMap): Promise<string | null> {
+export async function getGoogleAccounts(cookies: CookieMap): Promise<GoogleAccount[]> {
 	const cookieHeader = Object.entries(cookies)
 		.filter(([, v]) => typeof v === "string" && v.length > 0)
 		.map(([k, v]) => `${k}=${v}`)
@@ -403,8 +409,10 @@ export async function getActiveGoogleEmail(cookies: CookieMap): Promise<string |
 			// Find non-Google email addresses in the HTML (skip internal @google.com addresses)
 			const emails = html.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
 			if (emails) {
-				const userEmail = emails.find((e) => !e.endsWith("@google.com"));
-				if (userEmail) return userEmail;
+				const unique = [...new Set(emails.filter((e) => !e.endsWith("@google.com")))];
+				if (unique.length > 0) {
+					return unique.map((email, index) => ({ email, name: "", index }));
+				}
 			}
 		}
 	} catch {}
@@ -418,13 +426,33 @@ export async function getActiveGoogleEmail(cookies: CookieMap): Promise<string |
 			},
 			signal: AbortSignal.timeout(5000),
 		});
-		if (!res.ok) return null;
+		if (!res.ok) return [];
 
 		const text = await res.text();
-		// Response format: ["gaia.l.a",[[1,"user@gmail.com","Full Name",...],...]
-		const emailMatch = text.match(/\["gaia\.l\.a",\[\[.*?,"([^"]+@[^"]+)"/);
-		return emailMatch?.[1] ?? null;
+		// Response format: ["gaia.l.a",[[1,"email","Full Name",...],[1,"email2","Name2",...],...]]
+		const accounts: GoogleAccount[] = [];
+		// Extract the outer array after "gaia.l.a"
+		const match = text.match(/\["gaia\.l\.a",\[(\[.+)\]\s*\]/);
+		if (!match) return [];
+
+		// Parse individual account entries: [1,"email","name",...]
+		const emailRegex = /\[\d+,"([^"]+@[^"]+)","([^"]*)"/g;
+		let m: RegExpExecArray | null;
+		let idx = 0;
+		while ((m = emailRegex.exec(match[1])) !== null) {
+			accounts.push({ email: m[1], name: m[2], index: idx++ });
+		}
+		return accounts;
 	} catch {
-		return null;
+		return [];
 	}
+}
+
+/**
+ * Fetches the email of the active (primary) Google account.
+ * Convenience wrapper around getGoogleAccounts().
+ */
+export async function getActiveGoogleEmail(cookies: CookieMap): Promise<string | null> {
+	const accounts = await getGoogleAccounts(cookies);
+	return accounts[0]?.email ?? null;
 }

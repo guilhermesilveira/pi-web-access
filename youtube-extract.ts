@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { activityMonitor } from "./activity.js";
 import { isGeminiWebAvailable, queryWithCookies } from "./gemini-web.js";
+import { getConfiguredGoogleAccount, resolveAccountIndex } from "./gemini-search.js";
 import { isGeminiApiAvailable, queryGeminiApiWithVideo } from "./gemini-api.js";
 import { searchWithPerplexity } from "./perplexity.js";
 import { extractHeadingTitle, type ExtractedContent, type FrameResult, type VideoFrame } from "./extract.js";
@@ -201,11 +202,13 @@ async function tryGeminiWeb(
 
 		if (signal?.aborted) return null;
 
+		const accountIndex = resolveAccountIndex(availability.accounts, getConfiguredGoogleAccount());
 		const text = await queryWithCookies(prompt, availability.cookies, {
 			youtubeUrl: url,
 			model,
 			signal,
 			timeoutMs: 120000,
+			accountIndex,
 		});
 
 		return {

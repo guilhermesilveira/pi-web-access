@@ -1,9 +1,17 @@
-import { type CookieMap, getGoogleCookies, getActiveGoogleEmail } from "./chrome-cookies.js";
+import { type CookieMap, getGoogleCookies, getGoogleAccounts, type GoogleAccount } from "./chrome-cookies.js";
 
-const GEMINI_APP_URL = "https://gemini.google.com/app";
-const GEMINI_STREAM_GENERATE_URL =
-	"https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate";
+const GEMINI_BASE = "https://gemini.google.com";
 const GEMINI_UPLOAD_URL = "https://content-push.googleapis.com/upload";
+
+function geminiAppUrl(accountIndex?: number): string {
+	const prefix = accountIndex ? `/u/${accountIndex}` : "";
+	return `${GEMINI_BASE}${prefix}/app`;
+}
+
+function geminiStreamUrl(accountIndex?: number): string {
+	const prefix = accountIndex ? `/u/${accountIndex}` : "";
+	return `${GEMINI_BASE}${prefix}/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate`;
+}
 const GEMINI_UPLOAD_PUSH_ID = "feeds/mcudyrk2a4khkz";
 
 const USER_AGENT =
@@ -24,6 +32,7 @@ export interface GeminiWebOptions {
 	files?: string[];
 	signal?: AbortSignal;
 	timeoutMs?: number;
+	accountIndex?: number;
 }
 
 function hasRequiredCookies(cookieMap: CookieMap): boolean {
@@ -33,13 +42,15 @@ function hasRequiredCookies(cookieMap: CookieMap): boolean {
 export interface GeminiWebAvailability {
 	cookies: CookieMap;
 	email: string | null;
+	accounts: GoogleAccount[];
 }
 
 export async function isGeminiWebAvailable(): Promise<GeminiWebAvailability | null> {
 	const result = await getGoogleCookies();
 	if (!result || !hasRequiredCookies(result.cookies)) return null;
-	const email = await getActiveGoogleEmail(result.cookies);
-	return { cookies: result.cookies, email };
+	const accounts = await getGoogleAccounts(result.cookies);
+	const email = accounts[0]?.email ?? null;
+	return { cookies: result.cookies, email, accounts };
 }
 
 export async function queryWithCookies(
@@ -55,10 +66,11 @@ export async function queryWithCookies(
 		fullPrompt = `${fullPrompt}\n\nYouTube video: ${options.youtubeUrl}`;
 	}
 
-	const result = await runGeminiWebOnce(fullPrompt, cookieMap, model, options.files, timeoutMs, options.signal);
+	const accountIndex = options.accountIndex;
+	const result = await runGeminiWebOnce(fullPrompt, cookieMap, model, options.files, timeoutMs, options.signal, accountIndex);
 
 	if (isModelUnavailable(result.errorCode) && model !== "gemini-2.5-flash") {
-		const fallback = await runGeminiWebOnce(fullPrompt, cookieMap, "gemini-2.5-flash", options.files, timeoutMs, options.signal);
+		const fallback = await runGeminiWebOnce(fullPrompt, cookieMap, "gemini-2.5-flash", options.files, timeoutMs, options.signal, accountIndex);
 		if (fallback.errorMessage) throw new Error(fallback.errorMessage);
 		if (!fallback.text) throw new Error("Gemini Web returned empty response (fallback model)");
 		return fallback.text;
@@ -82,10 +94,11 @@ async function runGeminiWebOnce(
 	files: string[] | undefined,
 	timeoutMs: number,
 	signal?: AbortSignal,
+	accountIndex?: number,
 ): Promise<GeminiWebResult> {
 	const effectiveSignal = withTimeout(signal, timeoutMs);
 	const cookieHeader = buildCookieHeader(cookieMap);
-	const accessToken = await fetchAccessToken(cookieHeader, effectiveSignal);
+	const accessToken = await fetchAccessToken(cookieHeader, effectiveSignal, accountIndex);
 
 	const uploaded: Array<{ id: string; name: string }> = [];
 	if (files) {
@@ -99,7 +112,7 @@ async function runGeminiWebOnce(
 	params.set("at", accessToken);
 	params.set("f.req", fReq);
 
-	const res = await fetch(GEMINI_STREAM_GENERATE_URL, {
+	const res = await fetch(geminiStreamUrl(accountIndex), {
 		method: "POST",
 		headers: {
 			"content-type": "application/x-www-form-urlencoded;charset=utf-8",
@@ -140,8 +153,9 @@ async function runGeminiWebOnce(
 async function fetchAccessToken(
 	cookieHeader: string,
 	signal: AbortSignal,
+	accountIndex?: number,
 ): Promise<string> {
-	const html = await fetchWithCookieRedirects(GEMINI_APP_URL, cookieHeader, 10, signal);
+	const html = await fetchWithCookieRedirects(geminiAppUrl(accountIndex), cookieHeader, 10, signal);
 
 	for (const key of ["SNlM0e", "thykhd"]) {
 		const match = html.match(new RegExp(`"${key}":"(.*?)"`));
